@@ -1,21 +1,5 @@
 import 'package:flutter/material.dart';
-
-// [데이터 모델] 유저의 사고 기록 (SessionScreen에서 전달받음)
-class UserLog {
-  final String taskType;      // 예: 상황 파악
-  final String question;      // 문제 질문
-  final String selectedAnswer; // 내가 고른 답
-  final String evidenceText;  // 내가 선택한 근거 (대표 문장)
-  final String whyReason;     // 내가 선택한 이유
-
-  UserLog({
-    required this.taskType,
-    required this.question,
-    required this.selectedAnswer,
-    required this.evidenceText,
-    required this.whyReason,
-  });
-}
+import '../models/session_task.dart';
 
 class ResultScreen extends StatelessWidget {
   final String title;

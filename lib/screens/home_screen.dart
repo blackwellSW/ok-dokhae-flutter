@@ -1,89 +1,8 @@
 import 'package:flutter/material.dart';
 import 'session_screen.dart';
-
-// [데이터 모델] (기존 유지)
-class Book {
-  final String title;
-  final String author;
-  final String category;
-  final Color baseColor;
-  final Color patternColor;
-  final Color spineColor;
-  final int completedSets;
-  final String studyTime;
-  final String difficulty;
-
-  Book({
-    required this.title,
-    required this.author,
-    required this.category,
-    required this.baseColor,
-    required this.patternColor,
-    required this.spineColor,
-    this.completedSets = 0,
-    this.studyTime = '5분',
-    this.difficulty = '중',
-  });
-}
-
-// [더미 데이터] (기존 유지)
-final List<Book> allBooks = [
-  Book(
-    title: '심청전',
-    author: '작자미상',
-    category: '고전소설',
-    baseColor: const Color(0xFFD7CCC8),
-    patternColor: const Color(0xFF8D6E63),
-    spineColor: const Color(0xFF5D4037),
-    completedSets: 3,
-    studyTime: '7분',
-    difficulty: '중',
-  ),
-  Book(
-    title: '관동별곡',
-    author: '정철',
-    category: '고전시가',
-    baseColor: const Color(0xFFC8E6C9),
-    patternColor: const Color(0xFF2E7D32),
-    spineColor: const Color(0xFF1B5E20),
-    completedSets: 0,
-    studyTime: '10분',
-    difficulty: '상',
-  ),
-  Book(
-    title: '홍길동전',
-    author: '허균',
-    category: '고전소설',
-    baseColor: const Color(0xFFFFE0B2),
-    patternColor: const Color(0xFFEF6C00),
-    spineColor: const Color(0xFFE65100),
-    completedSets: 0,
-    studyTime: '6분',
-    difficulty: '하',
-  ),
-  Book(
-    title: '춘향전',
-    author: '작자미상',
-    category: '고전소설',
-    baseColor: const Color(0xFFFFCCBC),
-    patternColor: const Color(0xFFD84315),
-    spineColor: const Color(0xFFBF360C),
-    completedSets: 1,
-    studyTime: '8분',
-    difficulty: '중',
-  ),
-  Book(
-    title: '청산별곡',
-    author: '작자미상',
-    category: '고전시가',
-    baseColor: const Color(0xFFDCEDC8),
-    patternColor: const Color(0xFF558B2F),
-    spineColor: const Color(0xFF33691E),
-    completedSets: 0,
-    studyTime: '5분',
-    difficulty: '중',
-  ),
-];
+import '../models/work.dart';
+import '../services/api_service.dart';      // [추가] 인터페이스
+import '../services/mock_api_service.dart'; // [추가] 구현체
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -93,21 +12,28 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // [핵심] 서비스와 데이터 Future 선언
+  late ApiService _apiService;
+  late Future<List<Work>> _worksFuture;
+
   String _selectedFilter = '전체';
-  
-  // [수정 1] 타이틀을 카테고리 명칭("고전 문학")으로 변경
-  // "나의 서재"보다 "현재 내가 보고 있는 것"을 보여주는 게 UX 트렌드에 맞음
   String _currentCategoryTitle = "고전 문학";
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. 서비스 구현체 주입 (나중에 여기만 HttpApiService로 바꾸면 끝!)
+    _apiService = MockApiService();
+    
+    // 2. 데이터 요청 및 캐싱 (화면이 다시 그려져도 재요청 안 함)
+    _worksFuture = _apiService.getWorks();
+  }
 
   @override
   Widget build(BuildContext context) {
     const bgColor = Colors.white;
     const primaryColor = Color(0xFF4E342E);
     const accentColor = Color(0xFF8D6E63);
-
-    List<Book> filteredBooks = _selectedFilter == '전체'
-        ? allBooks
-        : allBooks.where((b) => b.category == _selectedFilter).toList();
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -116,8 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         centerTitle: false,
         titleSpacing: 24,
-        
-        // [타이틀 드롭다운]
         title: GestureDetector(
           onTap: () => _showCategorySheet(context),
           child: Row(
@@ -142,14 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        
-        // [필터 아이콘]
         actions: [
           IconButton(
             icon: const Icon(Icons.tune_rounded, color: Colors.grey),
             tooltip: "서재 정렬 및 필터",
             onPressed: () {
-              // [수정 3] "준비 중" 대신 "다음 업데이트 예고" 멘트로 변경
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text("다음 업데이트에서 정렬/필터 기능이 추가됩니다!"),
@@ -161,42 +82,46 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            children: [
-              // 1. Hero 섹션
-              Row(
-                children: [
-                  const Icon(Icons.history_edu, size: 20, color: accentColor),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '오늘의 추천 학습',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildRecentBookCard(context),
+      // [핵심] FutureBuilder로 데이터를 기다림
+      body: FutureBuilder<List<Work>>(
+        future: _worksFuture,
+        builder: (context, snapshot) {
+          // 1. 로딩 중일 때
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: primaryColor),
+            );
+          }
+          // 2. 에러 났을 때
+          else if (snapshot.hasError) {
+            return Center(child: Text("데이터를 불러오지 못했습니다.\n${snapshot.error}"));
+          }
+          // 3. 데이터 없음
+          else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("표시할 작품이 없습니다."));
+          }
 
-              const SizedBox(height: 32),
+          // 4. 데이터 도착 완료!
+          final works = snapshot.data!;
+          
+          // 필터링 로직
+          final filteredWorks = _selectedFilter == '전체'
+              ? works
+              : works.where((w) => w.category == _selectedFilter).toList();
 
-              // 2. 전체 작품 리스트
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 children: [
+                  // Hero 섹션
                   Row(
                     children: [
-                      const Icon(Icons.grid_view_rounded, size: 20, color: accentColor),
+                      const Icon(Icons.history_edu, size: 20, color: accentColor),
                       const SizedBox(width: 8),
                       const Text(
-                        '전체 작품',
+                        '오늘의 추천 학습',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -206,59 +131,90 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip('전체'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('고전소설'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('고전시가'),
-                      ],
-                    ),
+                  // 첫 번째 작품을 추천작으로 표시 (데이터가 있다는 전제)
+                  _buildRecentBookCard(context, works[0]),
+
+                  const SizedBox(height: 32),
+
+                  // 전체 작품 리스트
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.grid_view_rounded, size: 20, color: accentColor),
+                          const SizedBox(width: 8),
+                          const Text(
+                            '전체 작품',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildFilterChip('전체'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('고전소설'),
+                            const SizedBox(width: 8),
+                            _buildFilterChip('고전시가'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 20,
+                      mainAxisSpacing: 24,
+                    ),
+                    itemCount: filteredWorks.length,
+                    itemBuilder: (context, index) {
+                      return _buildBookCover(context, filteredWorks[index]);
+                    },
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
-              const SizedBox(height: 16),
-              
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.72,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 24,
-                ),
-                itemCount: filteredBooks.length,
-                itemBuilder: (context, index) {
-                  return _buildBookCover(context, filteredBooks[index]);
-                },
-              ),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        selectedItemColor: primaryColor,
-        unselectedItemColor: Colors.grey[400],
-        type: BottomNavigationBarType.fixed,
-        elevation: 0,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: '검색'),
-          BottomNavigationBarItem(icon: Icon(Icons.bookmarks_outlined), label: '저장'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'MY'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: Colors.grey.shade300, width: 1)),
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.white,
+          selectedItemColor: primaryColor,
+          unselectedItemColor: Colors.grey[400],
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
+            BottomNavigationBarItem(icon: Icon(Icons.search), label: '검색'),
+            BottomNavigationBarItem(icon: Icon(Icons.bookmarks_outlined), label: '저장'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'MY'),
+          ],
+        ),
       ),
     );
   }
 
-  // [카테고리 선택 바텀 시트]
+  // (아래부터는 기존 UI 위젯들 - 그대로 유지)
   void _showCategorySheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -283,12 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                // "준비중" 대신 "Beta / Coming Soon" 태그 사용
                 _buildSheetItem("📚 고전 문학", true),
                 _buildSheetItem("📰 비문학 (뉴스/사설)", false, tagText: "Beta"),
                 _buildSheetItem("💬 영어 지문 독해", false, tagText: "Coming Soon"),
                 
-                // "새 카테고리 추가" 버튼은 삭제됨
                 const SizedBox(height: 30),
               ],
             ),
@@ -324,10 +278,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       onTap: () {
-        if (tagText == null) { // "고전 문학"인 경우만 닫기
+        if (tagText == null) {
           Navigator.pop(context);
         }
-        // Beta 메뉴 클릭 시 아무 반응 없음 (Fake Door 유지)
       },
     );
   }
@@ -359,10 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // [기존 UI 유지] 상단 카드
-  Widget _buildRecentBookCard(BuildContext context) {
-    final book = allBooks[0];
-
+  Widget _buildRecentBookCard(BuildContext context, Work work) {
     return Container(
       height: 190,
       decoration: BoxDecoration(
@@ -382,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             width: 110,
             decoration: BoxDecoration(
-              color: book.baseColor,
+              color: work.baseColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(24),
                 bottomLeft: Radius.circular(24),
@@ -405,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ClipOval(
                       child: CustomPaint(
                         painter: CloudPatternPainter(
-                          color: book.patternColor.withOpacity(0.6),
+                          color: work.patternColor.withOpacity(0.6),
                         ),
                       ),
                     ),
@@ -436,12 +386,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    book.title,
+                    work.title,
                     style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF3E2723), letterSpacing: -0.5),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '이 작품: ${book.completedSets}세트 완료', 
+                    '이 작품: ${work.completedSets}세트 완료', 
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                   const Spacer(),
@@ -453,7 +403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                          Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => SessionScreen(title: book.title),
+                            builder: (context) => SessionScreen(id: work.id, title: work.title),
                           ),
                         );
                       },
@@ -469,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const Icon(Icons.play_arrow_rounded, size: 18),
                           const SizedBox(width: 4),
                           Text(
-                            '학습 시작 (${book.studyTime})',
+                            '학습 시작 (${work.studyTime})',
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -485,18 +435,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // [기존 UI 유지] 목록 카드
-  Widget _buildBookCover(BuildContext context, Book book) {
+  Widget _buildBookCover(BuildContext context, Work work) {
     return GestureDetector(
       onTap: () {
-        // 상세 페이지 이동 등
+        Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SessionScreen(id: work.id, title: work.title),
+        ),
+      );
       },
       child: Column(
         children: [
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: book.baseColor,
+                color: work.baseColor,
                 borderRadius: const BorderRadius.only(
                   topRight: Radius.circular(16), bottomRight: Radius.circular(16),
                   topLeft: Radius.circular(4), bottomLeft: Radius.circular(4),
@@ -509,7 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     left: 0, top: 0, bottom: 0, width: 12,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: book.spineColor.withOpacity(0.6),
+                        color: work.spineColor.withOpacity(0.6),
                         borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4)),
                       ),
                     ),
@@ -520,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 40, height: 40,
                       decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle),
                       child: ClipOval(
-                        child: CustomPaint(painter: CloudPatternPainter(color: book.patternColor.withOpacity(0.4))),
+                        child: CustomPaint(painter: CloudPatternPainter(color: work.patternColor.withOpacity(0.4))),
                       ),
                     ),
                   ),
@@ -535,7 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), borderRadius: BorderRadius.circular(4)),
                               child: Text(
-                                book.difficulty == '상' ? '난이도 상' : book.difficulty == '중' ? '난이도 중' : '입문 추천',
+                                work.difficulty == '상' ? '난이도 상' : work.difficulty == '중' ? '난이도 중' : '입문 추천',
                                 style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
                               ),
                             ),
@@ -543,12 +497,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const Spacer(),
                         Text(
-                          book.title,
+                          work.title,
                           style: const TextStyle(fontFamily: 'Pretendard', fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), height: 1.2, letterSpacing: -0.5),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '4문항 세트 · ${book.studyTime}',
+                          '4문항 세트 · ${work.studyTime}',
                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black.withOpacity(0.5)),
                         ),
                       ],
@@ -564,7 +518,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// 구름/물결 문양 Painter
 class CloudPatternPainter extends CustomPainter {
   final Color color;
   CloudPatternPainter({required this.color});
