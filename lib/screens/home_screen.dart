@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'session_screen.dart';
 
 // [데이터 모델]
 class Book {
@@ -367,6 +368,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                          print('${book.title} 학습 시작');
+                         Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SessionScreen(title: book.title),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF5D4037),
