@@ -1,16 +1,15 @@
 import '../models/work.dart';
-import '../models/session_task.dart'; // Task 모델 import
+import '../models/session_task.dart';
 
 abstract class ApiService {
-  // 전체 작품 목록 가져오기
   Future<List<Work>> getWorks();
-
-  // 특정 작품의 지문(문장 리스트) 가져오기
   Future<List<String>> getWorkContent(String workId);
+  
+  // [NEW] 대화형 학습을 위한 메서드 2개
+  Future<String> startThinkingSession(String workId); // 첫 질문 받기
+  Future<Map<String, dynamic>> getGuidance(String workId, String userAnswer); // 꼬리 질문 받기
 
-  // 특정 작품의 문제(Task) 리스트 가져오기
+  // 기존 메서드 (일단 유지)
   Future<List<Task>> getTasks(String workId);
-
-  // 학습 결과 제출하기 (POST)
-  Future<void> submitResult(String workId, List<UserLog> logs);
+  Future<Map<String, dynamic>> submitResult(String workId, dynamic logs);
 }

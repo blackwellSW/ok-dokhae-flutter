@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:math';
 import 'session_screen.dart';
 import '../models/work.dart';
-import '../services/api_service.dart';      // [추가] 인터페이스
-import '../services/mock_api_service.dart'; // [추가] 구현체
+import '../services/api_service.dart';
+import '../services/mock_api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,416 +14,249 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // [핵심] 서비스와 데이터 Future 선언
   late ApiService _apiService;
-  late Future<List<Work>> _worksFuture;
-
-  String _selectedFilter = '전체';
-  String _currentCategoryTitle = "고전 문학";
+  late Future<List<Work>> _demoWorksFuture;
 
   @override
   void initState() {
     super.initState();
-    // 1. 서비스 구현체 주입 (나중에 여기만 HttpApiService로 바꾸면 끝!)
     _apiService = MockApiService();
-    
-    // 2. 데이터 요청 및 캐싱 (화면이 다시 그려져도 재요청 안 함)
-    _worksFuture = _apiService.getWorks();
+    _demoWorksFuture = _apiService.getWorks();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    const bgColor = Colors.white;
-    const primaryColor = Color(0xFF4E342E);
-    const accentColor = Color(0xFF8D6E63);
+  Future<void> _handleFileUpload() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'txt', 'docx'],
+      );
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: bgColor,
-        elevation: 0,
-        centerTitle: false,
-        titleSpacing: 24,
-        title: GestureDetector(
-          onTap: () => _showCategorySheet(context),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _currentCategoryTitle,
-                style: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: primaryColor,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.keyboard_arrow_down_rounded, 
-                color: primaryColor,
-                size: 28,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.tune_rounded, color: Colors.grey),
-            tooltip: "서재 정렬 및 필터",
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("다음 업데이트에서 정렬/필터 기능이 추가됩니다!"),
-                  duration: Duration(milliseconds: 1500),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      // [핵심] FutureBuilder로 데이터를 기다림
-      body: FutureBuilder<List<Work>>(
-        future: _worksFuture,
-        builder: (context, snapshot) {
-          // 1. 로딩 중일 때
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: primaryColor),
-            );
-          }
-          // 2. 에러 났을 때
-          else if (snapshot.hasError) {
-            return Center(child: Text("데이터를 불러오지 못했습니다.\n${snapshot.error}"));
-          }
-          // 3. 데이터 없음
-          else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text("표시할 작품이 없습니다."));
-          }
-
-          // 4. 데이터 도착 완료!
-          final works = snapshot.data!;
-          
-          // 필터링 로직
-          final filteredWorks = _selectedFilter == '전체'
-              ? works
-              : works.where((w) => w.category == _selectedFilter).toList();
-
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                children: [
-                  // Hero 섹션
-                  Row(
-                    children: [
-                      const Icon(Icons.history_edu, size: 20, color: accentColor),
-                      const SizedBox(width: 8),
-                      const Text(
-                        '오늘의 추천 학습',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // 첫 번째 작품을 추천작으로 표시 (데이터가 있다는 전제)
-                  _buildRecentBookCard(context, works[0]),
-
-                  const SizedBox(height: 32),
-
-                  // 전체 작품 리스트
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.grid_view_rounded, size: 20, color: accentColor),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '전체 작품',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildFilterChip('전체'),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('고전소설'),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('고전시가'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.72,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 24,
-                    ),
-                    itemCount: filteredWorks.length,
-                    itemBuilder: (context, index) {
-                      return _buildBookCover(context, filteredWorks[index]);
-                    },
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.grey.shade300, width: 1)),
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: Colors.white,
-          selectedItemColor: primaryColor,
-          unselectedItemColor: Colors.grey[400],
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
-            BottomNavigationBarItem(icon: Icon(Icons.search), label: '검색'),
-            BottomNavigationBarItem(icon: Icon(Icons.bookmarks_outlined), label: '저장'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'MY'),
-          ],
-        ),
-      ),
-    );
+      if (result != null) {
+        String fileName = result.files.single.name;
+        if (!mounted) return;
+        _showContentPreview(fileName);
+      }
+    } catch (e) {
+      print("파일 선택 에러: $e");
+    }
   }
 
-  // (아래부터는 기존 UI 위젯들 - 그대로 유지)
-  void _showCategorySheet(BuildContext context) {
+  // [수정] 업로드 확인 모달 - "문서 분석기" 느낌 강화
+  void _showContentPreview(String fileName) {
+    // 가짜 메타데이터 생성 (신뢰도 상승용)
+    final random = Random();
+    final charCount = 10000 + random.nextInt(5000); 
+    final readTime = 5 + random.nextInt(5); 
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2)))),
+              
+              const Row(children: [
+                // [색상 변경] 갈색(0xFF5D4037) -> 메인 녹색(0xFF02B152)
+                Icon(Icons.description, color: Color(0xFF02B152)),
+                SizedBox(width: 8),
+                // [De-AI] "AI 분석" 대신 "학습 자료 준비"
+                Text("학습 자료 준비 완료",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+              ]),
+              const SizedBox(height: 16),
+              
+              // 파일 정보 카드
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Column(
+                  children: [
+                    Row(children: [
+                      // [색상 변경] 기존 green -> 메인 녹색(0xFF02B152)으로 통일
+                      const Icon(Icons.check_circle, size: 20, color: Color(0xFF02B152)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    // [신뢰도] 숫자 데이터 노출
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildMetaItem("글자 수", "${charCount}자"),
+                        _buildMetaItem("예상 시간", "${readTime}분"),
+                        _buildMetaItem("추출 품질", "매우 좋음"),
+                      ],
+                    )
+                  ],
                 ),
-                const SizedBox(height: 20),
-                
-                _buildSheetItem("📚 고전 문학", true),
-                _buildSheetItem("📰 비문학 (뉴스/사설)", false, tagText: "Beta"),
-                _buildSheetItem("💬 영어 지문 독해", false, tagText: "Coming Soon"),
-                
-                const SizedBox(height: 30),
-              ],
-            ),
+              ),
+              
+              const SizedBox(height: 24),
+              const Text("지문 미리보기", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 8),
+              
+              Container(
+                height: 100,
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8)),
+                child: const SingleChildScrollView(
+                  child: Text(
+                    "이 문서는 텍스트 추출 엔진을 통해 변환된 결과입니다.\n\n"
+                    "튜터가 이 내용을 바탕으로 사고 유도 질문을 생성합니다.\n"
+                    "(실제 구현 시에는 파일의 앞부분 내용이 여기에 표시됩니다.)\n\n"
+                    "텍스트가 깨져 보인다면 원본 파일을 다시 확인해주세요.",
+                    style: TextStyle(fontSize: 14, height: 1.6, color: Colors.black87),
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _navigateToSession('custom_file', fileName);
+                  },
+                  style: ElevatedButton.styleFrom(
+                      // [색상 변경] 갈색(0xFF5D4037) -> 메인 녹색(0xFF02B152)
+                      backgroundColor: const Color(0xFF02B152),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16))),
+                  child: const Text("이 자료로 진단 시작하기", // [De-AI] 세션 -> 진단
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildSheetItem(String title, bool isSelected, {String? tagText}) {
-    return ListTile(
-      leading: isSelected 
-          ? const Icon(Icons.check, color: Color(0xFF3E2723)) 
-          : const SizedBox(width: 24),
-      title: Row(
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? const Color(0xFF3E2723) : Colors.black87,
-              fontSize: 16,
-            ),
-          ),
-          if (tagText != null) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)),
-              child: Text(tagText, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-            )
-          ]
-        ],
-      ),
-      onTap: () {
-        if (tagText == null) {
-          Navigator.pop(context);
-        }
-      },
+  Widget _buildMetaItem(String label, String value) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+      ],
     );
   }
 
-  Widget _buildFilterChip(String label) {
-    bool isSelected = _selectedFilter == label;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedFilter = label;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4E342E) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected ? null : Border.all(color: Colors.grey.shade300),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? Colors.white : Colors.grey[600],
-          ),
-        ),
-      ),
-    );
+  void _navigateToSession(String id, String title) {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => SessionScreen(id: id, title: title)));
   }
 
-  Widget _buildRecentBookCard(BuildContext context, Work work) {
-    return Container(
-      height: 190,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 110,
-            decoration: BoxDecoration(
-              color: work.baseColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(24),
-                bottomLeft: Radius.circular(24),
+  void _navigateToDemo(Work work) => _navigateToSession(work.id, work.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
+              child: Row(
+                children: [
+                  // [색상 변경] 진한 갈색(0xFF4E342E) -> 메인 녹색(0xFF02B152)
+                  const Icon(Icons.auto_stories, color: Color(0xFF02B152), size: 28),
+                  const SizedBox(width: 8),
+                  // [색상 변경] 진한 갈색(0xFF4E342E) -> 진한 녹색 텍스트(0xFF1B5E20)
+                  const Text("OK 독해", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1B5E20))),
+                  const Spacer(),
+                  // [색상 변경] 갈색(0xFF5D4037) -> 메인 녹색(0xFF02B152)
+                  IconButton(onPressed: () {}, icon: const Icon(Icons.account_circle, color: Color(0xFF02B152), size: 32)),
+                ],
               ),
             ),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 12, top: 0, bottom: 0,
-                  child: Container(width: 2, color: Colors.black.withOpacity(0.1)),
-                ),
-                Center(
-                  child: Container(
-                    width: 60, height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
-                    ),
-                    child: ClipOval(
-                      child: CustomPaint(
-                        painter: CloudPatternPainter(
-                          color: work.patternColor.withOpacity(0.6),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
+            const Spacer(flex: 1),
+            Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4E342E), 
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      '4문항 실전 세트: 어휘·근거·Why·랜덤',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  // [De-AI] 결과물(리포트) 강조
+                  const Text(
+                    "대화로 사고를 확장하고,\n리포트로 진단해드려요.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.3),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    work.title,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF3E2723), letterSpacing: -0.5),
+                  
+                  // 배지: 혜택 강조
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      // [색상 변경] 오렌지 배경 -> 연한 녹색 배경(0xFFE8F5E9)
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(20),
+                      // [색상 변경] 오렌지 테두리 -> 연한 녹색 테두리(0xFFC8E6C9)
+                      border: Border.all(color: const Color(0xFFC8E6C9)),
+                    ),
+                    child: const Text(
+                      "✨ 3분 대화 후: 핵심 요약 + 사고 패턴 분석 리포트 제공",
+                      // [색상 변경] 오렌지 텍스트 -> 진한 녹색 텍스트(0xFF1B5E20)
+                      style: TextStyle(fontSize: 13, color: Color(0xFF1B5E20), fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '이 작품: ${work.completedSets}세트 완료', 
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 40,
-                    child: ElevatedButton(
-                      onPressed: () {
-                         Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => SessionScreen(id: work.id, title: work.title),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5D4037),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  
+                  const SizedBox(height: 40),
+                  GestureDetector(
+                    onTap: _handleFileUpload,
+                    child: Container(
+                      width: 280, height: 180,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE0E0E0), width: 2),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                       ),
-                      child: Row(
+                      child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.play_arrow_rounded, size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            '학습 시작 (${work.studyTime})',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]),
+                            // [색상 변경] 갈색(0xFF5D4037) -> 메인 녹색(0xFF02B152)
+                            child: const Icon(Icons.cloud_upload_rounded, size: 40, color: Color(0xFF02B152)),
                           ),
+                          const SizedBox(height: 16),
+                          // [색상 변경] 갈색(0xFF5D4037) -> 진한 녹색 텍스트(0xFF1B5E20)
+                          const Text("파일 업로드하기", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
+                          const SizedBox(height: 4),
+                          const Text("PDF, TXT, DOCX 지원", style: TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ),
@@ -429,112 +264,47 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookCover(BuildContext context, Work work) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SessionScreen(id: work.id, title: work.title),
-        ),
-      );
-      },
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: work.baseColor,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(16), bottomRight: Radius.circular(16),
-                  topLeft: Radius.circular(4), bottomLeft: Radius.circular(4),
-                ),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(4, 4))],
-              ),
-              child: Stack(
+            const Spacer(flex: 2),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(color: Color(0xFFFAFAFA), borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30))),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Positioned(
-                    left: 0, top: 0, bottom: 0, width: 12,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: work.spineColor.withOpacity(0.6),
-                        borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4)),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 20, right: 20,
-                    child: Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), shape: BoxShape.circle),
-                      child: ClipOval(
-                        child: CustomPaint(painter: CloudPatternPainter(color: work.patternColor.withOpacity(0.4))),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), borderRadius: BorderRadius.circular(4)),
-                              child: Text(
-                                work.difficulty == '상' ? '난이도 상' : work.difficulty == '중' ? '난이도 중' : '입문 추천',
-                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black87),
+                  const Text("자료가 없으신가요? 예시로 시작해보세요.", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 100,
+                    child: FutureBuilder<List<Work>>(
+                      future: _demoWorksFuture,
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                        final works = snapshot.data!;
+                        return ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: works.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            final work = works[index];
+                            return GestureDetector(
+                              onTap: () => _navigateToDemo(work),
+                              child: Container(
+                                width: 200, padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(color: work.baseColor.withOpacity(0.3), borderRadius: BorderRadius.circular(16), border: Border.all(color: work.baseColor)),
+                                child: Row(children: [Container(width: 40, height: 40, decoration: BoxDecoration(color: work.spineColor, shape: BoxShape.circle), child: Center(child: Text(work.title[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [Text(work.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), Text(work.author, style: const TextStyle(fontSize: 12, color: Colors.black54))]))]),
                               ),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Text(
-                          work.title,
-                          style: const TextStyle(fontFamily: 'Pretendard', fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723), height: 1.2, letterSpacing: -0.5),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '4문항 세트 · ${work.studyTime}',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black.withOpacity(0.5)),
-                        ),
-                      ],
+                            );
+                          },
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-}
-
-class CloudPatternPainter extends CustomPainter {
-  final Color color;
-  CloudPatternPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..strokeWidth = 1.5..style = PaintingStyle.stroke;
-    var path = Path();
-    for (double i = 0; i < size.height + 20; i += 15) {
-      path.moveTo(0, i);
-      for (double x = 0; x < size.width; x += 20) {
-        path.quadraticBezierTo(x + 10, i - 8, x + 20, i);
-      }
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

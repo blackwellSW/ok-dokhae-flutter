@@ -37,7 +37,7 @@ class _LandingScreenState extends State<LandingScreen> {
   @override
   Widget build(BuildContext context) {
     // 고전문학 테마 색상 (Modern Hanok - Deep Brown)
-    const primaryColor = Color(0xFF5D4037); 
+    const primaryColor = Color(0xFF02B152); 
     const textColor = Color(0xFF3E2723);
 
     return Scaffold(
