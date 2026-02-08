@@ -10,28 +10,42 @@ class RealApiService implements ApiService {
   final DocumentRepository _docRepo = DocumentRepository();
   final SessionRepository _sessionRepo = SessionRepository();
 
-  // 화면이 세션 ID를 몰라도 되도록 내부에서 관리
   String? _currentSessionId;
 
   @override
   Future<List<Work>> getWorks() async {
-    // 백엔드의 Document를 UI의 Work 모델로 변환 (어댑터 역할)
-    List<Document> docs = await _docRepo.getDocuments();
-    return docs.map((doc) => Work(
-      id: doc.id,
-      title: doc.title,
-      author: "업로드된 문서", // 백엔드에 정보가 없으면 기본값
-      category: "개인 학습",
-      baseColor: const Color(0xFF5D4037), // 기본 테마색
-      patternColor: const Color(0xFFD7CCC8),
-      spineColor: const Color(0xFF3E2723),
-      studyTime: doc.charCount != null ? "${(doc.charCount! / 500).ceil()}분" : "미정",
-    )).toList();
+    try {
+      List<Document> docs = await _docRepo.getDocuments();
+      
+      return docs.map((doc) {
+        // [수정] 글자수 기반 시간 계산
+        final int count = doc.charCount ?? 0;
+        final String timeStr = count > 0 ? "${(count / 500).ceil()}분" : "분석 중";
+
+        return Work(
+          id: doc.id.isEmpty ? "temp_${DateTime.now().millisecondsSinceEpoch}" : doc.id,
+          title: doc.title.isEmpty ? "제목 없음" : doc.title,
+          author: "내 문서함", 
+          category: "개인 학습",
+          baseColor: const Color(0xFF02B152),       
+          patternColor: const Color(0xFFE8F5E9),
+          spineColor: const Color(0xFF1B5E20),
+          studyTime: timeStr, 
+        );
+      }).toList();
+    } catch (e) {
+      print("Service 에러: $e");
+      return [];
+    }
+  }
+
+  @override
+  Future<List<String>> getWorkContent(String workId) async {
+    return await _docRepo.getDocumentContent(workId);
   }
 
   @override
   Future<String> startThinkingSession(String workId) async {
-    // workId == documentId
     final result = await _sessionRepo.createSession(workId);
     if (result != null) {
       _currentSessionId = result['session_id'];
@@ -43,27 +57,27 @@ class RealApiService implements ApiService {
   @override
   Future<Map<String, dynamic>> getGuidance(String workId, String userAnswer) async {
     if (_currentSessionId == null) {
-      return {"text": "세션이 만료되었습니다. 다시 시작해주세요.", "is_finish": true};
+      return {"text": "세션이 만료되었습니다.", "is_finish": true};
     }
 
     final result = await _sessionRepo.sendMessage(_currentSessionId!, userAnswer);
     
     if (result != null) {
-      // 백엔드 응답을 UI 포맷에 맞게 변환
+      // [핵심] 서버가 완료 신호를 주면 is_finish를 true로 설정 -> 리포트 화면 이동 트리거
+      final status = result['session_status'] as String?;
+      final isFinished = status == 'completed' || status == 'finalized';
+      
       return {
-        "text": result['assistant_message'],
-        // status가 completed면 종료 신호 보냄
-        "is_finish": result['session_status'] == 'completed' || result['session_status'] == 'finalized', 
+        "text": result['assistant_message'] ?? "응답이 없습니다.",
+        "is_finish": isFinished, 
       };
     }
-    return {"text": "오류가 발생했습니다.", "is_finish": false};
+    return {"text": "네트워크 오류가 발생했습니다.", "is_finish": false};
   }
 
-  // 아래 메서드들은 현재 대화형 UI에서는 사용되지 않으나 인터페이스 구현을 위해 둠
-  @override
-  Future<List<String>> getWorkContent(String workId) async => [];
   @override
   Future<List<Task>> getTasks(String workId) async => [];
+
   @override
-  Future<Map<String, dynamic>> submitResult(String workId, logs) async => {};
+  Future<Map<String, dynamic>> submitResult(String workId, dynamic logs) async => {};
 }

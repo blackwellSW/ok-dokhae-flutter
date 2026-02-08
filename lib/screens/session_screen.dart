@@ -33,24 +33,43 @@ class _SessionScreenState extends State<SessionScreen> {
   String? _attachedFileName;
   bool _isContentExpanded = false; 
 
+  // [Logic] 응답 대기 상태 변수 추가
+  bool _isLoadingResponse = false;
+
   @override
   void initState() {
     super.initState();
+    // [Logic] 데모 모드에 따라 서비스 선택
     _apiService = ApiConfig.demoMode ? MockApiService() : RealApiService();
     _initSession();
   }
 
+  // [Logic] 세션 시작
   Future<void> _initSession() async {
     setState(() => _currentStep = LearningStep.loading);
     
-    // AI가 먼저 질문하지 않고, 지문 내용만 로드함
-    final content = await _apiService.getWorkContent(widget.id);
+    try {
+      // 1. 지문 내용 로드
+      final content = await _apiService.getWorkContent(widget.id);
+      
+      // 2. 세션 시작 API 호출 (서버에 방 생성)
+      // (AI가 먼저 질문하지 않더라도 세션 ID는 받아와야 하므로 호출)
+      await _apiService.startThinkingSession(widget.id);
 
-    if (!mounted) return;
-    setState(() {
-      _content = content;
-      _currentStep = LearningStep.chatting;
-    });
+      if (!mounted) return;
+      setState(() {
+        _content = content;
+        _currentStep = LearningStep.chatting;
+      });
+    } catch (e) {
+      print("세션 초기화 실패: $e");
+      // 에러 상황에서도 채팅은 가능하게 열어둠
+      if (!mounted) return;
+      setState(() {
+        _currentStep = LearningStep.chatting;
+        _content = ["내용을 불러올 수 없습니다."];
+      });
+    }
   }
 
   Future<void> _pickFile() async {
@@ -75,6 +94,7 @@ class _SessionScreenState extends State<SessionScreen> {
     _sendMessage();
   }
 
+  // [Logic] 메시지 전송 및 응답 처리
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty && _attachedFileName == null) return;
@@ -88,25 +108,41 @@ class _SessionScreenState extends State<SessionScreen> {
       _chatHistory.add({"role": "user", "text": userMsg});
       _inputController.clear();
       _attachedFileName = null; 
-      _currentStep = LearningStep.loading; // 로딩 중 표시
+      _isLoadingResponse = true; // [Logic] 로딩 상태 true (UI엔 반영 안 되지만 로직상 필요)
     });
     
     // 스크롤 아래로
     _scrollToBottom();
 
-    // AI 응답 호출
-    final response = await _apiService.getGuidance(widget.id, text);
+    try {
+      // [Logic] AI 응답 호출 (RealApiService 사용)
+      final response = await _apiService.getGuidance(widget.id, text);
 
-    if (!mounted) return;
-    setState(() {
-      _chatHistory.add({"role": "ai", "text": response['text']});
-      if (response['is_finish'] == true) {
-        _currentStep = LearningStep.report; 
-      } else {
-        _currentStep = LearningStep.chatting;
-      }
-    });
-    _scrollToBottom();
+      if (!mounted) return;
+      setState(() {
+        _isLoadingResponse = false;
+        
+        final aiText = response['text'] as String? ?? "응답이 없습니다.";
+        _chatHistory.add({"role": "ai", "text": aiText});
+        
+        final isFinish = response['is_finish'] as bool? ?? false;
+        if (isFinish) {
+          _currentStep = LearningStep.report; 
+        } else {
+          _currentStep = LearningStep.chatting;
+        }
+      });
+      _scrollToBottom();
+
+    } catch (e) {
+      print("메시지 전송 에러: $e");
+      if (!mounted) return;
+      setState(() {
+        _isLoadingResponse = false;
+        _chatHistory.add({"role": "ai", "text": "오류가 발생했습니다. 다시 시도해주세요."});
+      });
+      _scrollToBottom();
+    }
   }
 
   void _scrollToBottom() {
@@ -441,8 +477,9 @@ class _SessionScreenState extends State<SessionScreen> {
                       : ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.all(16),
-                          itemCount: _chatHistory.length + (_currentStep == LearningStep.loading ? 1 : 0),
+                          itemCount: _chatHistory.length + (_isLoadingResponse ? 1 : 0),
                           itemBuilder: (context, index) {
+                            // [UI] 로딩 인디케이터 (메시지 마지막에 표시)
                             if (index == _chatHistory.length) {
                               return const Align(
                                 alignment: Alignment.centerLeft,
@@ -535,7 +572,10 @@ class _SessionScreenState extends State<SessionScreen> {
         width: double.infinity,
         child: ElevatedButton.icon(
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("분석 리포트 화면으로 이동합니다.")));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => ResultScreen(title: widget.title)),
+            );
           },
           icon: const Icon(Icons.assessment, color: Colors.white),
           label: const Text("최종 진단 리포트 확인", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
