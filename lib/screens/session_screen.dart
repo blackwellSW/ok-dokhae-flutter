@@ -36,6 +36,9 @@ class _SessionScreenState extends State<SessionScreen> {
   // [Logic] 응답 대기 상태 변수 추가
   bool _isLoadingResponse = false;
 
+  // [Logic] 서버로부터 받은 리포트 데이터를 저장할 변수
+  Map<String, dynamic>? _finalReport;
+
   @override
   void initState() {
     super.initState();
@@ -108,14 +111,14 @@ class _SessionScreenState extends State<SessionScreen> {
       _chatHistory.add({"role": "user", "text": userMsg});
       _inputController.clear();
       _attachedFileName = null; 
-      _isLoadingResponse = true; // [Logic] 로딩 상태 true (UI엔 반영 안 되지만 로직상 필요)
+      _isLoadingResponse = true; // [Logic] 로딩 상태 true
     });
     
     // 스크롤 아래로
     _scrollToBottom();
 
     try {
-      // [Logic] AI 응답 호출 (RealApiService 사용)
+      // [Logic] AI 응답 호출
       final response = await _apiService.getGuidance(widget.id, text);
 
       if (!mounted) return;
@@ -127,7 +130,11 @@ class _SessionScreenState extends State<SessionScreen> {
         
         final isFinish = response['is_finish'] as bool? ?? false;
         if (isFinish) {
-          _currentStep = LearningStep.report; 
+          // [Logic] 리포트 데이터 저장 및 상태 변경 (화면 이동 X)
+          _currentStep = LearningStep.report;
+          if (response.containsKey('report')) {
+            _finalReport = response['report'];
+          }
         } else {
           _currentStep = LearningStep.chatting;
         }
@@ -182,9 +189,13 @@ class _SessionScreenState extends State<SessionScreen> {
                     
                     Future.delayed(const Duration(milliseconds: 1500), () {
                       if (!mounted) return;
+                      // [Logic] 데이터 전달하며 이동
                       Navigator.push(
                         context, 
-                        MaterialPageRoute(builder: (context) => ResultScreen(title: widget.title))
+                        MaterialPageRoute(builder: (context) => ResultScreen(
+                          title: widget.title,
+                          reportData: _finalReport,
+                        ))
                       );
                     });
                   },
@@ -572,9 +583,13 @@ class _SessionScreenState extends State<SessionScreen> {
         width: double.infinity,
         child: ElevatedButton.icon(
           onPressed: () {
+            // [Logic] 리포트 확인 버튼 클릭 시 화면 이동 및 데이터 전달
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => ResultScreen(title: widget.title)),
+              MaterialPageRoute(builder: (context) => ResultScreen(
+                title: widget.title, 
+                reportData: _finalReport // 데이터 전달
+              )),
             );
           },
           icon: const Icon(Icons.assessment, color: Colors.white),
