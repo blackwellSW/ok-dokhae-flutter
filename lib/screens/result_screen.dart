@@ -12,14 +12,14 @@ class ResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // [진단용 로그] 서버에서 받은 데이터가 뭔지 콘솔에 출력합니다.
+    // [진단용 로그]
     if (reportData != null) {
       print("✅ [ResultScreen] 데이터 수신 성공: $reportData");
     } else {
       print("⚠️ [ResultScreen] 데이터 없음 (Mock 데이터 사용)");
     }
 
-    // [Mock Data] 데이터가 아예 안 넘어왔을 때만 사용
+    // [Mock Data] fallback
     final Map<String, dynamic> mockData = {
       "summary": "서버로부터 데이터를 불러오지 못했습니다.",
       "tags": ["#데이터없음"], 
@@ -28,15 +28,13 @@ class ResultScreen extends StatelessWidget {
       "prescription": "잠시 후 다시 시도해주세요."
     };
 
-    // 실제 데이터가 있으면 사용, 없으면 Mock 사용
     final data = reportData ?? mockData;
     
-    // [핵심 수정] 서버가 null을 보내도 죽지 않게 '빈 리스트'로 방어 처리
+    // [데이터 파싱 및 방어 로직]
     final List<dynamic> tags = (data['tags'] is List) ? data['tags'] : [];
     final List<dynamic> scores = (data['scores'] is List) ? data['scores'] : [];
     final List<dynamic> flows = (data['flow_analysis'] is List) ? data['flow_analysis'] : [];
     
-    // 텍스트 데이터도 null이면 빈 문자열로 처리
     final String summary = data['summary']?.toString() ?? "요약 내용이 없습니다.";
     final String prescription = data['prescription']?.toString() ?? "처방 내용이 없습니다.";
 
@@ -54,7 +52,7 @@ class ResultScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. 헤더 (종합 진단)
+            // 1. 헤더
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -84,7 +82,7 @@ class ResultScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // 2. 역량 분석 (점수)
+            // 2. 역량 분석 (점수) - [수정] 점수 매핑 로직 개선
             if (scores.isNotEmpty)
               Container(
                 color: Colors.white,
@@ -98,15 +96,37 @@ class ResultScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     
                     ...scores.map<Widget>((item) {
-                      // 점수 데이터 안전하게 변환
-                      final double score = (item['score'] is num) ? (item['score'] as num).toDouble() : 0.0;
-                      final String label = item['label']?.toString() ?? "평가 항목";
-                      final String labelText = item['label_text']?.toString() ?? (score >= 80 ? "탁월함" : (score >= 60 ? "좋음" : "보통")); 
-                      // (서버 점수가 100점 만점인지 1.0 만점인지에 따라 다를 수 있으니 확인 필요. 일단 UI는 0~1.0 기준 LinearProgressIndicator 사용 시 /100 처리 필요할 수도 있음)
-                      // 만약 서버가 80, 90 이렇게 준다면 아래 value: score / 100.0 으로 수정해야 함.
-                      // 현재는 0.9, 0.85로 가정하고 작성됨.
+                      // 1. 점수 추출 (0.0 ~ 1.0)
+                      double rawScore = (item['score'] is num) ? (item['score'] as num).toDouble() : 0.0;
                       
+                      // [Logic] 만약 서버가 100점 단위로 보냈다면 1.0 단위로 정규화
+                      if (rawScore > 1.0) rawScore = rawScore / 100.0;
+                      // 범위를 0~1로 제한
+                      rawScore = rawScore.clamp(0.0, 1.0);
+
+                      final String label = item['label']?.toString() ?? "평가 항목";
                       final String reason = item['reason']?.toString() ?? "분석 내용 없음";
+                      
+                      // [Logic] 점수에 따른 등급 및 색상 자동 매핑
+                      String gradeText;
+                      Color gradeColor;
+                      
+                      if (rawScore >= 0.9) {
+                        gradeText = "탁월"; // S급
+                        gradeColor = const Color(0xFF2E7D32); // 진한 녹색
+                      } else if (rawScore >= 0.75) {
+                        gradeText = "우수"; // A급
+                        gradeColor = const Color(0xFF43A047); // 녹색
+                      } else if (rawScore >= 0.5) {
+                        gradeText = "보통"; // B급
+                        gradeColor = const Color(0xFFF9A825); // 노란색
+                      } else {
+                        gradeText = "미흡"; // C급 이하
+                        gradeColor = const Color(0xFFC62828); // 빨간색
+                      }
+                      
+                      // 서버에서 label_text를 줬다면 그걸 우선 사용
+                      final String finalLabelText = item['label_text']?.toString() ?? gradeText;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 24.0),
@@ -120,16 +140,16 @@ class ResultScreen extends StatelessWidget {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
-                                      // 서버가 100점 만점으로 주면 score / 100.0, 1.0 만점이면 그냥 score
-                                      value: score > 1 ? score / 100.0 : score, 
+                                      value: rawScore, // 0.0 ~ 1.0 사용
                                       minHeight: 8,
                                       backgroundColor: Colors.grey[100],
-                                      color: _getScoreColor(score > 1 ? score / 100.0 : score),
+                                      color: gradeColor,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                Text(labelText, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _getScoreColor(score > 1 ? score / 100.0 : score))),
+                                // 등급 텍스트 (예: 탁월)
+                                Text(finalLabelText, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: gradeColor)),
                               ],
                             ),
                             const SizedBox(height: 8),
@@ -152,7 +172,6 @@ class ResultScreen extends StatelessWidget {
                 ),
               ),
             
-            // 점수가 없으면 안내 메시지
             if (scores.isEmpty)
                Container(
                  width: double.infinity,
@@ -266,19 +285,24 @@ class ResultScreen extends StatelessWidget {
     );
   }
 
-  Color _getScoreColor(double score) {
-    if (score >= 0.9) return const Color(0xFF2E7D32);
-    if (score >= 0.7) return const Color(0xFFF9A825);
-    return const Color(0xFFC62828);
-  }
-
+  // 아이콘 매핑 함수 (상태에 따라 아이콘과 색상 반환)
   Widget _buildStepIcon(String status) {
     IconData icon;
     Color color;
-    switch (status) {
-      case 'perfect': icon = Icons.check_circle; color = const Color(0xFF2E7D32); break;
-      case 'good': icon = Icons.check_circle_outline; color = const Color(0xFF1976D2); break;
-      case 'weak': default: icon = Icons.error_outline; color = const Color(0xFFF57F17); break;
+    
+    // 소문자로 변환해 비교 (혹시나 대문자로 올 경우 대비)
+    final s = status.toLowerCase();
+
+    if (s.contains('perfect') || s.contains('excellent')) {
+      icon = Icons.check_circle;
+      color = const Color(0xFF2E7D32);
+    } else if (s.contains('good') || s.contains('average')) {
+      icon = Icons.check_circle_outline;
+      color = const Color(0xFF1976D2);
+    } else {
+      // weak, bad 등
+      icon = Icons.error_outline;
+      color = const Color(0xFFF57F17);
     }
     return Container(color: Colors.white, child: Icon(icon, color: color, size: 24));
   }
