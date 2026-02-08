@@ -1,5 +1,8 @@
 import 'package:flutter/gestures.dart'; // 웹에서 마우스 드래그 지원을 위해 필요
 import 'package:flutter/material.dart';
+import '../repositories/auth_repository.dart';
+import 'home_screen.dart';
+import 'session_screen.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -9,6 +12,42 @@ class LandingScreen extends StatefulWidget {
 }
 
 class _LandingScreenState extends State<LandingScreen> {
+  void _startDemoSession() {
+    // 로그인 없이 바로 데모 세션으로 진입 (MockApiService 기준)
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => const SessionScreen(id: 'gwandong', title: '관동별곡'),
+      ),
+    );
+  }
+
+  final AuthRepository _authRepo = AuthRepository();
+  bool _isLoading = false;
+
+  Future<void> _handleGoogleLogin() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final bool success = await _authRepo.loginWithGoogle();
+      if (!mounted) return;
+
+      if (success) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("구글 로그인 실패 (백엔드 연결 확인 필요)")),
+        );
+      }
+    } catch (e) {
+      print(e);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
@@ -230,46 +269,80 @@ class _LandingScreenState extends State<LandingScreen> {
                             width: double.infinity,
                             height: 56,
                             child: OutlinedButton(
-                              onPressed: () {
-                                // [로그인 로직]
-                                print("구글 로그인 시도");
-                                // TODO: 로그인 성공 시 홈 화면으로 이동
-                                Navigator.pushReplacementNamed(context, '/home');
-                              },
+                              onPressed: _isLoading ? null : _handleGoogleLogin,
+
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: primaryColor, // 짙은 갈색 배경
+                                backgroundColor: const Color(0xFF02B152), // 기존 primaryColor (혹은 변수명 그대로 쓰셔도 됨)
                                 side: BorderSide.none,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 elevation: 2,
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  // 구글 로고 이미지
-                                  Image.asset(
-                                    'assets/images/google_logo.png',
-                                    width: 24,
-                                    height: 24,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      // 이미지가 없으면 흰색 아이콘 표시
-                                      return const Icon(Icons.login, color: Colors.white);
-                                    },
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Google로 시작하기',
-                                    style: TextStyle(
-                                      fontFamily: 'Pretendard',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white, // 흰색 글씨
-                                    ),
+                              
+                              // [수정 2] 로딩 중이면 '뺑글이(Spinner)', 아니면 원래 '구글 로고 + 텍스트'
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 24, height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white, 
+                                        strokeWidth: 2
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Image.asset(
+                                          'assets/images/google_logo.png',
+                                          width: 24,
+                                          height: 24,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return const Icon(Icons.login, color: Colors.white);
+                                          },
+                                        ),
+                                        const SizedBox(width: 12),
+                                        const Text(
+                                          'Google로 시작하기',
+                                          style: TextStyle(
+                                            fontFamily: 'Pretendard',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
                                   ),
                                 ],
                               ),
                             ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    AnimatedOpacity(
+                      opacity: _currentPage == 2 ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: IgnorePointer(
+                        ignoring: _currentPage != 2,
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                            children: [
+                              const TextSpan(text: "구글 로그인 없이 먼저 "),
+                              TextSpan(
+                                text: "OK독해 체험해보기!",
+                                style: const TextStyle(
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.w700,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                recognizer: TapGestureRecognizer()..onTap = _startDemoSession,
+                              ),
+                            ],
                           ),
                         ),
                       ),

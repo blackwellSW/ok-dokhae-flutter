@@ -5,6 +5,8 @@ import 'session_screen.dart';
 import '../models/work.dart';
 import '../services/api_service.dart';
 import '../services/mock_api_service.dart';
+import '../services/real_api_service.dart';
+import '../config/api_config.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _apiService = MockApiService();
+    _apiService = ApiConfig.demoMode ? MockApiService() : RealApiService();
     _demoWorksFuture = _apiService.getWorks();
   }
 

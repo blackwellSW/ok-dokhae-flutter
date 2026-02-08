@@ -3,6 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import '../services/api_service.dart';
 import '../services/mock_api_service.dart';
 import 'result_screen.dart';
+import '../config/api_config.dart';
+import '../services/real_api_service.dart';
 
 class SessionScreen extends StatefulWidget {
   final String id;
@@ -22,32 +24,31 @@ class _SessionScreenState extends State<SessionScreen> {
   LearningStep _currentStep = LearningStep.loading;
   List<String> _content = []; 
   
+  // 초기 대화 기록을 비워둠 (사용자가 먼저 시작)
   final List<Map<String, String>> _chatHistory = [];
   
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
   String? _attachedFileName;
-  
   bool _isContentExpanded = false; 
 
   @override
   void initState() {
     super.initState();
-    _apiService = MockApiService(); 
+    _apiService = ApiConfig.demoMode ? MockApiService() : RealApiService();
     _initSession();
   }
 
   Future<void> _initSession() async {
     setState(() => _currentStep = LearningStep.loading);
     
+    // AI가 먼저 질문하지 않고, 지문 내용만 로드함
     final content = await _apiService.getWorkContent(widget.id);
-    final firstQuestion = await _apiService.startThinkingSession(widget.id);
 
     if (!mounted) return;
     setState(() {
       _content = content;
-      _chatHistory.add({"role": "ai", "text": firstQuestion});
       _currentStep = LearningStep.chatting;
     });
   }
@@ -68,6 +69,12 @@ class _SessionScreenState extends State<SessionScreen> {
     }
   }
 
+  // 칩을 눌렀을 때 바로 질문 전송하는 함수
+  void _sendChipMessage(String text) {
+    _inputController.text = text;
+    _sendMessage();
+  }
+
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty && _attachedFileName == null) return;
@@ -81,10 +88,13 @@ class _SessionScreenState extends State<SessionScreen> {
       _chatHistory.add({"role": "user", "text": userMsg});
       _inputController.clear();
       _attachedFileName = null; 
-      _currentStep = LearningStep.loading; 
+      _currentStep = LearningStep.loading; // 로딩 중 표시
     });
+    
+    // 스크롤 아래로
     _scrollToBottom();
 
+    // AI 응답 호출
     final response = await _apiService.getGuidance(widget.id, text);
 
     if (!mounted) return;
@@ -111,7 +121,6 @@ class _SessionScreenState extends State<SessionScreen> {
     });
   }
 
-  // 세션 종료 옵션 (Bottom Sheet)
   void _showExitOptions() {
     showModalBottomSheet(
       context: context, 
@@ -121,7 +130,8 @@ class _SessionScreenState extends State<SessionScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("진단을 종료하시겠습니까?", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              // [수정] 진단 -> 세션 (일관성 유지)
+              const Text("세션을 종료하시겠습니까?", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               const Text("지금까지의 대화 내용을 바탕으로 분석 리포트를 생성합니다.", style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
@@ -142,7 +152,7 @@ class _SessionScreenState extends State<SessionScreen> {
                       );
                     });
                   },
-                  // [색상 변경] 갈색 -> 녹색
+                  // 녹색 테마 유지
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF02B152)),
                   child: const Text("네, 리포트 생성하기", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
@@ -176,7 +186,6 @@ class _SessionScreenState extends State<SessionScreen> {
             children: [
               const Row(
                 children: [
-                  // [색상 변경] 갈색 -> 녹색
                   Icon(Icons.menu_book, color: Color(0xFF02B152)),
                   SizedBox(width: 8),
                   Text("근거 문장 확인", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -234,7 +243,6 @@ class _SessionScreenState extends State<SessionScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    // [색상 변경] 갈색 -> 녹색
                     backgroundColor: const Color(0xFF02B152),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -246,6 +254,68 @@ class _SessionScreenState extends State<SessionScreen> {
           ),
         );
       },
+    );
+  }
+
+  // [수정] 튜터 톤앤매너가 적용된 가이드 화면
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Color(0xFFE8F5E9), // 연한 녹색 배경
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.chat_bubble_outline, size: 40, color: Color(0xFF02B152)),
+            ),
+            const SizedBox(height: 20),
+            // [수정] 설명서 말투 -> 말 거는 말투
+            const Text(
+              "어디가 막혔나요?\n거기서부터 같이 봐요.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.3),
+            ),
+            const SizedBox(height: 12),
+            // [수정] 튜터의 역할 재정의 (안심시키기)
+            Text(
+              "제가 질문을 던지면서\n생각을 정리하게 도와드릴게요.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600], height: 1.4),
+            ),
+            const SizedBox(height: 30),
+            // [수정] 구체적인 질문 예시 (사용자가 바로 누르고 싶게)
+            Wrap(
+              spacing: 8,
+              runSpacing: 10,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildActionChip("🤔 이 구절, 무슨 뜻인지 모르겠어"),
+                _buildActionChip("🧐 화자의 감정이 정확히 뭐야?"),
+                _buildActionChip("🔑 주제를 잡는 단서가 뭐야?"),
+                _buildActionChip("✅ 내 해석이 맞는지 봐줘"),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionChip(String label) {
+    return ActionChip(
+      label: Text(label),
+      backgroundColor: Colors.white,
+      side: BorderSide(color: Colors.grey.shade300),
+      labelStyle: const TextStyle(color: Colors.black87, fontSize: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      // 이모지(2글자) 제외하고 텍스트만 전송
+      onPressed: () => _sendChipMessage(label.substring(2).trim()), 
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
 
@@ -262,16 +332,14 @@ class _SessionScreenState extends State<SessionScreen> {
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
-        // 우상단 진단 종료 버튼
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: TextButton.icon(
               onPressed: _showExitOptions,
-              // [색상 변경] 아이콘: 갈색 -> 녹색
               icon: const Icon(Icons.exit_to_app, size: 18, color: Color(0xFF02B152)),
-              // [색상 변경] 텍스트: 갈색 -> 녹색
-              label: const Text("진단 종료", style: TextStyle(color: Color(0xFF02B152), fontWeight: FontWeight.bold)),
+              // [수정] 진단 종료 -> 세션 종료
+              label: const Text("세션 종료", style: TextStyle(color: Color(0xFF02B152), fontWeight: FontWeight.bold)),
               style: TextButton.styleFrom(
                 backgroundColor: Colors.grey[50],
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -282,6 +350,7 @@ class _SessionScreenState extends State<SessionScreen> {
       ),
       body: Column(
         children: [
+          // 상태 배지
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -301,6 +370,7 @@ class _SessionScreenState extends State<SessionScreen> {
             ),
           ),
 
+          // 지문 영역
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -321,10 +391,8 @@ class _SessionScreenState extends State<SessionScreen> {
                       color: Colors.transparent,
                       child: Row(
                         children: [
-                          // [색상 변경] 갈색 -> 녹색
                           const Icon(Icons.description_outlined, size: 18, color: Color(0xFF02B152)),
                           const SizedBox(width: 8),
-                          // [색상 변경] 갈색 -> 녹색
                           const Text("지문 본문 보기", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF02B152))),
                           const Spacer(),
                           Text(
@@ -341,7 +409,6 @@ class _SessionScreenState extends State<SessionScreen> {
                       ),
                     ),
                   ),
-                  
                   if (_isContentExpanded)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -361,31 +428,35 @@ class _SessionScreenState extends State<SessionScreen> {
             ),
           ),
 
+          // 대화 영역
           Expanded(
             child: Container(
               color: Colors.white,
               child: Column(
                 children: [
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _chatHistory.length + (_currentStep == LearningStep.loading ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == _chatHistory.length) {
-                          return const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                            ),
-                          );
-                        }
-                        final msg = _chatHistory[index];
-                        final isAi = msg['role'] == 'ai';
-                        return _buildChatBubble(isAi, msg['text']!);
-                      },
-                    ),
+                    // 대화 기록이 없으면 가이드(EmptyState), 있으면 채팅 리스트
+                    child: _chatHistory.isEmpty && _currentStep != LearningStep.loading
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _chatHistory.length + (_currentStep == LearningStep.loading ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == _chatHistory.length) {
+                              return const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                ),
+                              );
+                            }
+                            final msg = _chatHistory[index];
+                            final isAi = msg['role'] == 'ai';
+                            return _buildChatBubble(isAi, msg['text']!);
+                          },
+                        ),
                   ),
                   _buildBottomArea(),
                 ],
@@ -404,7 +475,6 @@ class _SessionScreenState extends State<SessionScreen> {
         if (isAi) 
           const Padding(
             padding: EdgeInsets.only(left: 4, bottom: 4),
-            // [색상 변경] 갈색 -> 녹색
             child: Text("튜터", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF02B152))),
           ),
         
@@ -413,7 +483,6 @@ class _SessionScreenState extends State<SessionScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
           decoration: BoxDecoration(
-            // [색상 변경] 사용자 버블 갈색 -> 녹색
             color: isAi ? const Color(0xFFF5F5F5) : const Color(0xFF02B152),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
@@ -471,7 +540,6 @@ class _SessionScreenState extends State<SessionScreen> {
           icon: const Icon(Icons.assessment, color: Colors.white),
           label: const Text("최종 진단 리포트 확인", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           style: ElevatedButton.styleFrom(
-            // [색상 변경] 갈색 -> 녹색
             backgroundColor: const Color(0xFF02B152),
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -498,11 +566,11 @@ class _SessionScreenState extends State<SessionScreen> {
               Expanded(
                 child: TextField(
                   controller: _inputController,
-                  decoration: const InputDecoration(hintText: "답변을 입력하세요...", border: InputBorder.none, isDense: true),
+                  // [수정] 질문 유도형 placeholder
+                  decoration: const InputDecoration(hintText: "질문이나 막힌 구절을 입력하세요...", border: InputBorder.none, isDense: true),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
-              // [색상 변경] 전송 아이콘: 갈색 -> 녹색
               IconButton(onPressed: _sendMessage, icon: const Icon(Icons.send, color: Color(0xFF02B152))),
             ],
           ),
