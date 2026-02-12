@@ -12,7 +12,7 @@ class ResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // [진단용 로그]
+    // 진단용 로그
     if (reportData != null) {
       print("✅ [ResultScreen] 데이터 수신 성공: $reportData");
     } else {
@@ -30,7 +30,7 @@ class ResultScreen extends StatelessWidget {
 
     final data = reportData ?? mockData;
     
-    // [데이터 파싱 및 방어 로직]
+    // 데이터 파싱 및 방어 로직
     final List<dynamic> tags = (data['tags'] is List) ? data['tags'] : [];
     final List<dynamic> scores = (data['scores'] is List) ? data['scores'] : [];
     final List<dynamic> flows = (data['flow_analysis'] is List) ? data['flow_analysis'] : [];
@@ -52,7 +52,6 @@ class ResultScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. 헤더
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -82,7 +81,7 @@ class ResultScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // 2. 역량 분석 (점수) - [수정] 점수 매핑 로직 개선
+            // 역량 분석
             if (scores.isNotEmpty)
               Container(
                 color: Colors.white,
@@ -96,36 +95,31 @@ class ResultScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     
                     ...scores.map<Widget>((item) {
-                      // 1. 점수 추출 (0.0 ~ 1.0)
                       double rawScore = (item['score'] is num) ? (item['score'] as num).toDouble() : 0.0;
                       
-                      // [Logic] 만약 서버가 100점 단위로 보냈다면 1.0 단위로 정규화
                       if (rawScore > 1.0) rawScore = rawScore / 100.0;
-                      // 범위를 0~1로 제한
                       rawScore = rawScore.clamp(0.0, 1.0);
 
                       final String label = item['label']?.toString() ?? "평가 항목";
                       final String reason = item['reason']?.toString() ?? "분석 내용 없음";
                       
-                      // [Logic] 점수에 따른 등급 및 색상 자동 매핑
                       String gradeText;
                       Color gradeColor;
                       
                       if (rawScore >= 0.9) {
-                        gradeText = "탁월"; // S급
-                        gradeColor = const Color(0xFF2E7D32); // 진한 녹색
+                        gradeText = "탁월";
+                        gradeColor = const Color(0xFF2E7D32); 
                       } else if (rawScore >= 0.75) {
-                        gradeText = "우수"; // A급
-                        gradeColor = const Color(0xFF43A047); // 녹색
+                        gradeText = "우수";
+                        gradeColor = const Color(0xFF43A047);
                       } else if (rawScore >= 0.5) {
-                        gradeText = "보통"; // B급
-                        gradeColor = const Color(0xFFF9A825); // 노란색
+                        gradeText = "보통"; 
+                        gradeColor = const Color(0xFFF9A825);
                       } else {
-                        gradeText = "미흡"; // C급 이하
-                        gradeColor = const Color(0xFFC62828); // 빨간색
+                        gradeText = "미흡"; 
+                        gradeColor = const Color(0xFFC62828);
                       }
                       
-                      // 서버에서 label_text를 줬다면 그걸 우선 사용
                       final String finalLabelText = item['label_text']?.toString() ?? gradeText;
 
                       return Padding(
@@ -140,7 +134,7 @@ class ResultScreen extends StatelessWidget {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
-                                      value: rawScore, // 0.0 ~ 1.0 사용
+                                      value: rawScore, 
                                       minHeight: 8,
                                       backgroundColor: Colors.grey[100],
                                       color: gradeColor,
@@ -148,7 +142,6 @@ class ResultScreen extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                // 등급 텍스트 (예: 탁월)
                                 Text(finalLabelText, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: gradeColor)),
                               ],
                             ),
@@ -182,7 +175,7 @@ class ResultScreen extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // 3. 사고 흐름 분석
+            // 사고 흐름 분석
             if (flows.isNotEmpty)
               Container(
                 color: Colors.white,
@@ -235,7 +228,7 @@ class ResultScreen extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // 4. 튜터의 맞춤 처방
+            // 튜터의 맞춤 처방
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(24),
@@ -262,7 +255,7 @@ class ResultScreen extends StatelessWidget {
             ),
             const SizedBox(height: 40),
 
-            // 5. 하단 버튼
+            // 하단 버튼
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: SizedBox(
@@ -285,12 +278,11 @@ class ResultScreen extends StatelessWidget {
     );
   }
 
-  // 아이콘 매핑 함수 (상태에 따라 아이콘과 색상 반환)
+  // 아이콘 매핑 함수
   Widget _buildStepIcon(String status) {
     IconData icon;
     Color color;
     
-    // 소문자로 변환해 비교 (혹시나 대문자로 올 경우 대비)
     final s = status.toLowerCase();
 
     if (s.contains('perfect') || s.contains('excellent')) {
@@ -300,7 +292,6 @@ class ResultScreen extends StatelessWidget {
       icon = Icons.check_circle_outline;
       color = const Color(0xFF1976D2);
     } else {
-      // weak, bad 등
       icon = Icons.error_outline;
       color = const Color(0xFFF57F17);
     }

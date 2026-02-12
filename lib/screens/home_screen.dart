@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart'; 
-import 'dart:math';
 import 'session_screen.dart';
 import '../models/work.dart';
 import '../services/api_service.dart';
@@ -27,9 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
   
   final ScrollController _scrollController = ScrollController();
 
-  // [UI Logic] 화살표 표시 여부 상태
+  // 화살표 표시 여부 상태
   bool _showLeftButton = false;
-  bool _showRightButton = true; // 데이터가 로딩되기 전엔 일단 보이게 하거나, 로직에 따라 처리
+  bool _showRightButton = true;
 
   @override
   void initState() {
@@ -42,14 +41,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _demoWorksFuture = _apiService.getWorks();
   }
 
-  // [UI Logic] 스크롤 버튼 상태 업데이트 함수
+  // 스크롤 버튼 상태 업데이트 함수
   bool _updateScrollVisibility(ScrollNotification notification) {
     final metrics = notification.metrics;
-    
-    // 왼쪽: 스크롤이 0보다 크면 보임
     final showLeft = metrics.pixels > 0;
-    
-    // 오른쪽: 현재 위치가 최대 길이보다 작으면 보임 (여유분 1픽셀 둠)
     final showRight = metrics.pixels < metrics.maxScrollExtent - 1;
 
     if (_showLeftButton != showLeft || _showRightButton != showRight) {
@@ -58,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _showRightButton = showRight;
       });
     }
-    return true; // 이벤트 버블링 허용
+    return true;
   }
 
   void _scrollLeft() {
@@ -346,7 +341,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         return Stack(
                           alignment: Alignment.center,
                           children: [
-                            // [FIX] NotificationListener로 스크롤 감지 -> 버튼 상태 업데이트
                             NotificationListener<ScrollNotification>(
                               onNotification: _updateScrollVisibility,
                               child: ScrollConfiguration(
@@ -394,7 +388,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
 
-                            // [UI] 왼쪽 화살표 (맨 왼쪽이면 안 보임)
                             if (_showLeftButton)
                               Positioned(
                                 left: 0,
@@ -413,7 +406,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
 
-                            // [UI] 오른쪽 화살표 (맨 오른쪽이면 안 보임)
                             if (_showRightButton)
                               Positioned(
                                 right: 0,

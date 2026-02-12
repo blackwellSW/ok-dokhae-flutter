@@ -10,17 +10,13 @@ class DioClient {
 
   DioClient() : _dio = Dio(BaseOptions(
     baseUrl: baseUrl,
-    // [수정] 타임아웃을 10초 -> 120초(2분)로 대폭 증가
-    // AI 모델이 답변을 생성하는 데 시간이 걸릴 수 있습니다.
     connectTimeout: const Duration(seconds: 300),
     receiveTimeout: const Duration(seconds: 300), 
     sendTimeout: const Duration(seconds: 300),
     responseType: ResponseType.json,
   )) {
-    // [Interceptor 설정] 모든 요청 헤더에 토큰 자동 추가
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // 저장된 토큰 꺼내기
         final token = await _storage.read(key: 'access_token');
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
@@ -28,7 +24,7 @@ class DioClient {
         return handler.next(options);
       },
       onError: (error, handler) {
-        // 에러 로그 출력
+        // 에러 로그
         print("API 에러 발생: ${error.response?.statusCode} / ${error.message}");
         return handler.next(error);
       },

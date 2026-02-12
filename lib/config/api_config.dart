@@ -1,10 +1,9 @@
 class ApiConfig {
-  /// true면 Mock(데모), false면 Real(실서버)
+  /// true면 데모, false면 실서버
   static const bool demoMode =
       bool.fromEnvironment('DEMO_MODE', defaultValue: false);
 
-  /// 실서버 Base URL (demoMode=false일 때 사용)
-  /// 마지막 슬래시 없이 넣는 걸 권장합니다.
+  // 실서버 Base URL
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue:

@@ -2,7 +2,7 @@ class UserProfile {
   final String userId;
   final String email;
   final String username;
-  final String userType; // 'student', 'teacher', 'admin'
+  final String userType;
   final bool isActive;
 
   UserProfile({

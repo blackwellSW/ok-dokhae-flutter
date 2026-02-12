@@ -33,21 +33,21 @@ class _SessionScreenState extends State<SessionScreen> {
   String? _attachedFileName;
   bool _isContentExpanded = false; 
 
-  // [Logic] 응답 대기 상태 변수 추가
+  // 응답 대기 상태 변수
   bool _isLoadingResponse = false;
 
-  // [Logic] 서버로부터 받은 리포트 데이터를 저장할 변수
+  // 서버로부터 받은 리포트 데이터를 저장할 변수
   Map<String, dynamic>? _finalReport;
 
   @override
   void initState() {
     super.initState();
-    // [Logic] 데모 모드에 따라 서비스 선택
+    // 데모 모드에 따라 서비스 선택
     _apiService = ApiConfig.demoMode ? MockApiService() : RealApiService();
     _initSession();
   }
 
-  // [Logic] 세션 시작
+  // 세션 시작
   Future<void> _initSession() async {
     setState(() => _currentStep = LearningStep.loading);
     
@@ -56,7 +56,7 @@ class _SessionScreenState extends State<SessionScreen> {
       final content = await _apiService.getWorkContent(widget.id);
       
       // 2. 세션 시작 API 호출 (서버에 방 생성)
-      // (AI가 먼저 질문하지 않더라도 세션 ID는 받아와야 하므로 호출)
+      // AI가 먼저 질문하지 않더라도 세션 ID는 받아와야 하므로 호출
       await _apiService.startThinkingSession(widget.id);
 
       if (!mounted) return;
@@ -97,7 +97,7 @@ class _SessionScreenState extends State<SessionScreen> {
     _sendMessage();
   }
 
-  // [Logic] 메시지 전송 및 응답 처리
+  // 메시지 전송 및 응답 처리
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty && _attachedFileName == null) return;
@@ -111,14 +111,13 @@ class _SessionScreenState extends State<SessionScreen> {
       _chatHistory.add({"role": "user", "text": userMsg});
       _inputController.clear();
       _attachedFileName = null; 
-      _isLoadingResponse = true; // [Logic] 로딩 상태 true
+      _isLoadingResponse = true; 
     });
     
-    // 스크롤 아래로
     _scrollToBottom();
 
     try {
-      // [Logic] AI 응답 호출
+      // AI 응답 호출
       final response = await _apiService.getGuidance(widget.id, text);
 
       if (!mounted) return;
@@ -130,7 +129,7 @@ class _SessionScreenState extends State<SessionScreen> {
         
         final isFinish = response['is_finish'] as bool? ?? false;
         if (isFinish) {
-          // [Logic] 리포트 데이터 저장 및 상태 변경 (화면 이동 X)
+          // 리포트 데이터 저장 및 상태 변경
           _currentStep = LearningStep.report;
           if (response.containsKey('report')) {
             _finalReport = response['report'];
@@ -173,7 +172,6 @@ class _SessionScreenState extends State<SessionScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // [수정] 진단 -> 세션 (일관성 유지)
               const Text("세션을 종료하시겠습니까?", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               const Text("지금까지의 대화 내용을 바탕으로 분석 리포트를 생성합니다.", style: TextStyle(color: Colors.grey)),
@@ -189,7 +187,6 @@ class _SessionScreenState extends State<SessionScreen> {
                     
                     Future.delayed(const Duration(milliseconds: 1500), () {
                       if (!mounted) return;
-                      // [Logic] 데이터 전달하며 이동
                       Navigator.push(
                         context, 
                         MaterialPageRoute(builder: (context) => ResultScreen(
@@ -199,7 +196,6 @@ class _SessionScreenState extends State<SessionScreen> {
                       );
                     });
                   },
-                  // 녹색 테마 유지
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF02B152)),
                   child: const Text("네, 리포트 생성하기", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
@@ -304,7 +300,7 @@ class _SessionScreenState extends State<SessionScreen> {
     );
   }
 
-  // [수정] 튜터 톤앤매너가 적용된 가이드 화면
+  // 튜터 가이드 화면
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -315,27 +311,24 @@ class _SessionScreenState extends State<SessionScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: const BoxDecoration(
-                color: Color(0xFFE8F5E9), // 연한 녹색 배경
+                color: Color(0xFFE8F5E9),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.chat_bubble_outline, size: 40, color: Color(0xFF02B152)),
             ),
             const SizedBox(height: 20),
-            // [수정] 설명서 말투 -> 말 거는 말투
             const Text(
               "어디가 막혔나요?\n거기서부터 같이 봐요.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87, height: 1.3),
             ),
             const SizedBox(height: 12),
-            // [수정] 튜터의 역할 재정의 (안심시키기)
             Text(
               "제가 질문을 던지면서\n생각을 정리하게 도와드릴게요.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey[600], height: 1.4),
             ),
             const SizedBox(height: 30),
-            // [수정] 구체적인 질문 예시 (사용자가 바로 누르고 싶게)
             Wrap(
               spacing: 8,
               runSpacing: 10,
@@ -385,7 +378,6 @@ class _SessionScreenState extends State<SessionScreen> {
             child: TextButton.icon(
               onPressed: _showExitOptions,
               icon: const Icon(Icons.exit_to_app, size: 18, color: Color(0xFF02B152)),
-              // [수정] 진단 종료 -> 세션 종료
               label: const Text("세션 종료", style: TextStyle(color: Color(0xFF02B152), fontWeight: FontWeight.bold)),
               style: TextButton.styleFrom(
                 backgroundColor: Colors.grey[50],
@@ -490,7 +482,6 @@ class _SessionScreenState extends State<SessionScreen> {
                           padding: const EdgeInsets.all(16),
                           itemCount: _chatHistory.length + (_isLoadingResponse ? 1 : 0),
                           itemBuilder: (context, index) {
-                            // [UI] 로딩 인디케이터 (메시지 마지막에 표시)
                             if (index == _chatHistory.length) {
                               return const Align(
                                 alignment: Alignment.centerLeft,
@@ -583,12 +574,11 @@ class _SessionScreenState extends State<SessionScreen> {
         width: double.infinity,
         child: ElevatedButton.icon(
           onPressed: () {
-            // [Logic] 리포트 확인 버튼 클릭 시 화면 이동 및 데이터 전달
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => ResultScreen(
                 title: widget.title, 
-                reportData: _finalReport // 데이터 전달
+                reportData: _finalReport
               )),
             );
           },
@@ -621,7 +611,6 @@ class _SessionScreenState extends State<SessionScreen> {
               Expanded(
                 child: TextField(
                   controller: _inputController,
-                  // [수정] 질문 유도형 placeholder
                   decoration: const InputDecoration(hintText: "질문이나 막힌 구절을 입력하세요...", border: InputBorder.none, isDense: true),
                   onSubmitted: (_) => _sendMessage(),
                 ),

@@ -7,7 +7,6 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // [수정] Firebase 초기화 시 옵션 직접 입력
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -40,8 +39,6 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      // [중요] 로그인 여부에 따라 첫 화면 결정 로직이 있으면 좋지만, 
-      // 일단 LandingScreen으로 시작해서 로그인하게 유도
       home: const LandingScreen(),
     );
   }

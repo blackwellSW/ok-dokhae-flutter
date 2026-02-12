@@ -7,7 +7,7 @@ import '../models/document_model.dart';
 class DocumentRepository {
   final DioClient _client = DioClient();
 
-  // [1] 문서 업로드
+  // 문서 업로드
   Future<Document?> uploadDocument({
     required String fileName,
     String? filePath,
@@ -41,7 +41,7 @@ class DocumentRepository {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
-        // 업로드 직후 응답 처리
+        
         String realTitle = fileName;
         int realChars = 0;
 
@@ -66,7 +66,7 @@ class DocumentRepository {
     return null;
   }
 
-  // [2] 문서 목록 조회 (파일명 복구 로직 강화)
+  // 문서 목록 조회
   Future<List<Document>> getDocuments() async {
     try {
       final response = await _client.dio.get('/documents');
@@ -79,13 +79,11 @@ class DocumentRepository {
           list = response.data;
         }
 
-        // [핵심] 제목이 doc_... 이면 상세 조회로 진짜 이름 찾기
         final futures = list.map((e) async {
           String id = e['document_id'] ?? e['id'] ?? '';
           String title = e['title'] ?? e['filename'] ?? '제목 없음';
           int charCount = e['total_chars'] ?? e['char_count'] ?? 0;
 
-          // 제목이 ID와 같거나 doc_로 시작하면 상세 조회 시도
           if (id.isNotEmpty && (title == id || title.startsWith('doc_'))) {
             try {
               final detailRes = await _client.dio.get('/documents/$id');
@@ -97,7 +95,7 @@ class DocumentRepository {
                 }
               }
             } catch (_) {
-              // 실패하면 원래 제목 사용
+              
             }
           }
 
@@ -117,7 +115,7 @@ class DocumentRepository {
     return [];
   }
 
-  // [3] 문서 삭제
+  // 문서 삭제
   Future<bool> deleteDocument(String documentId) async {
     try {
       if (documentId.isEmpty) return false;
@@ -131,7 +129,7 @@ class DocumentRepository {
     }
   }
 
-  // [4] 내용 조회
+  // 내용 조회
   Future<List<String>> getDocumentContent(String documentId) async {
     try {
       if (documentId.isEmpty) return ["ID 오류"];

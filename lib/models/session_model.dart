@@ -1,7 +1,7 @@
 class LearningSession {
   final String id;
   final String documentId;
-  final String status; // 'active', 'finalized'
+  final String status;
   final DateTime createdAt;
 
   LearningSession({
