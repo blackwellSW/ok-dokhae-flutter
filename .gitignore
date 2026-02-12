@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase 설정
+lib/firebase_config.dart
+lib/firebase_options.dart
+.env
+google-services.json
+GoogleService-Info.plist
+
+# Firebase 호스팅
+.firebase/
+firebase-debug.log
